@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flow State Engine</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+--bg: #030303;
+--surface: rgba(255, 255, 255, 0.04);
+--border: rgba(255, 255, 255, 0.08);
+--accent-focus: #818cf8;
+--accent-chill: #fb923c;
+--accent-zen: #2dd4bf;
+--text-main: #f4f4f5;
+--text-dim: #b1b1b1;
+--font-sans: 'Plus Jakarta Sans', sans-serif;
+--font-mono: 'JetBrains Mono', monospace;
+--transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        --tier-bronze: #cd7f32; 
+        --tier-silver: #c0c0c0; 
+        --tier-gold: #ffd700;
+    }
+
+    * { 
+        margin: 0; 
+        padding: 0; 
+        box-sizing: border-box; 
+    }
+
+    body {
+        font-family: var(--font-sans);
+        background-color: var(--bg);
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+        color: var(--text-main);
+        height: 100vh;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: 300px 1fr 320px;
+        transition: var(--transition);
+    }
+
+    .glow {
+        position: fixed;
+        width: 60vw;
+        height: 60vw;
+        filter: blur(140px);
+        opacity: 0.12;
+        z-index: -1;
+        border-radius: 50%;
+        pointer-events: none;
+        transition: background 0.8s ease;
+    }
+    #glow-1 { top: -15%; left: -15%; background: var(--accent-focus); }
+    #glow-2 { bottom: -15%; right: -15%; background: var(--accent-chill); }
+
+    aside { 
+        background: rgba(0,0,0,0.5);
+        backdrop-filter: blur(40px);
+        padding: 2rem 1.5rem; 
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        border-left: 1px solid var(--border); 
+        border-right: 1px solid var(--border);
+        z-index: 20;
+        overflow-y: auto;
+        scrollbar-width: none;
+        transition: var(--transition);
+        width: 100%;
+    }
+    aside::-webkit-scrollbar { display: none; }
+
+    body.zen-mode {
+        grid-template-columns: 0px 1fr 0px;
+    }
+    body.zen-mode aside {
+        opacity: 0;
+        pointer-events: none;
+        width: 0;
+        padding: 2rem 0;
+        border: none;
+    }
+
+    .section-label {
+        font-size: 0.6rem;
+        text-transform: uppercase;
+        letter-spacing: 0.25em;
+        color: var(--text-dim);
+        font-weight: 800;
+        margin-bottom: 0.75rem;
+    }
+
+    .stat-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        padding: 1.25rem;
+        border-radius: 1.25rem;
+    }
+    .stat-val { font-family: var(--font-mono); font-size: 1.5rem; font-weight: 700; }
+    .stat-sub { font-size: 0.7rem; color: var(--text-dim); margin-top: 0.25rem; text-transform: uppercase; font-weight: 700; }
+
+    .xp-card {
+        background: linear-gradient(145deg, rgba(255,255,255,0.06), rgba(255,255,255,0.01));
+        border: 1px solid var(--border);
+        padding: 1.25rem;
+        border-radius: 1.5rem;
+        cursor: pointer;
+        transition: 0.3s;
+        position: relative;
+    }
+    .xp-card:hover {
+        border-color: var(--accent-zen);
+        transform: translateY(-2px);
+    }
+    .xp-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 0.8rem; }
+    .xp-rank { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.2em; color: var(--accent-zen); font-weight: 800; }
+    .xp-lvl { font-family: var(--font-mono); font-size: 1.2rem; font-weight: 700; }
+    .xp-bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; margin: 8px 0; }
+    .xp-bar-fill { height: 100%; background: var(--accent-zen); width: 0%; transition: width 1s; }
+
+    .badge-widget {
+        background: linear-gradient(145deg, rgba(255,255,255,0.06), rgba(255,255,255,0.01));
+        border: 1px solid var(--border);
+        padding: 1.25rem;
+        border-radius: 1.5rem;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+    .badge-widget:hover {
+        border-color: var(--accent-zen);
+        transform: translateY(-2px);
+    }
+    .badge-grid-mini {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin-top: 10px;
+    }
+    .badge-slot-mini {
+        aspect-ratio: 1;
+        background: rgba(255,255,255,0.03);
+        border-radius: 10px;
+        border: 1px dashed var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+    }
+
+    .calendar {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 1.5rem;
+        padding: 1.25rem;
+        overflow: visible;
+    }
+    .cal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1.2rem;
+        width: 100%;
+    }
+    .cal-month-label { font-weight: 800; font-size: 0.9rem; color: var(--text-main); text-align: center; }
+    .cal-nav-btn {
+        background: rgba(255,255,255,0.05);
+        border: 1px solid var(--border);
+        color: var(--text-main);
+        cursor: pointer;
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: 0.2s;
+    }
+    .cal-nav-btn:hover { background: rgba(255,255,255,0.15); }
+    
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+    .cal-day-label { color: var(--text-main); font-size: 0.65rem; font-weight: 800; margin-bottom: 8px; }
+    .cal-date { 
+        position: relative; 
+        padding: 10px 0; 
+        border-radius: 8px; 
+        color: var(--text-dim); 
+        font-size: 0.8rem; 
+        transition: 0.2s;
+    }
+    .cal-date.active { color: var(--text-main); }
+    .cal-date.current { background: var(--accent-focus); color: white; font-weight: 800; }
+    .cal-date.has-data::after {
+        content: '';
+        position: absolute;
+        bottom: 4px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 4px;
+        height: 4px;
+        background: var(--accent-zen);
+        border-radius: 50%;
+    }
+
+    .cal-tooltip {
+        position: absolute;
+        bottom: 110%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #18181b;
+        border: 1px solid var(--border);
+        padding: 8px 12px;
+        border-radius: 10px;
+        z-index: 1000;
+        min-width: 100px;
+        display: none;
+        flex-direction: column;
+        gap: 4px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        pointer-events: none;
+    }
+    .cal-date:hover .cal-tooltip { display: flex; }
+    .tooltip-row { display: flex; justify-content: space-between; font-size: 0.65rem; font-family: var(--font-mono); }
+
+    .modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(3,3,3,0.96);
+        backdrop-filter: blur(25px);
+        z-index: 2000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+    }
+    .modal-content {
+        width: 100%;
+        max-width: 550px;
+        background: #0a0a0c;
+        border: 1px solid var(--border);
+        border-radius: 2.5rem;
+        padding: 2.5rem;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    .achievement-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.5rem; }
+    .achievement-item {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        padding: 1rem;
+        border-radius: 1.25rem;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+    .achievement-item.pinned { border-color: var(--accent-zen); box-shadow: inset 0 0 15px rgba(45,212,191,0.05); }
+    .achievement-item.locked { opacity: 0.25; filter: grayscale(1); }
+
+    main {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        transition: var(--transition);
+    }
+    #timer-display {
+        font-family: var(--font-mono);
+        font-size: clamp(4.5rem, 10vw, 8.5rem);
+        font-weight: 700;
+        line-height: 1;
+        margin-bottom: 2rem;
+        letter-spacing: -0.05em;
+        font-variant-numeric: tabular-nums;
+    }
+    .controls { display: flex; gap: 1rem; }
+    .btn {
+        height: 54px;
+        padding: 0 1.5rem;
+        border-radius: 1.25rem;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+        color: white;
+        cursor: pointer;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        transition: 0.3s;
+    }
+    .btn:hover { background: rgba(255, 255, 255, 0.12); transform: translateY(-2px); border-color: rgba(255,255,255,0.3); }
+
+    .task-item {
+        background: var(--surface);
+        padding: 0.85rem;
+        border-radius: 1rem;
+        border: 1px solid var(--border);
+        margin-bottom: 0.6rem;
+        display: flex;
+        align-items: center;
+        transition: 0.3s;
+    }
+    .task-item.done { opacity: 0.45; border-style: dashed; }
+    .task-item.done span { text-decoration: line-through; }
+    #task-input {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--border);
+        padding: 1.25rem;
+        border-radius: 1.25rem;
+        color: white;
+        outline: none;
+        transition: 0.3s;
+    }
+
+    #settings-drawer {
+        position: fixed;
+        top: 2rem;
+        left: 50%;
+        transform: translateX(-50%) translateY(-200%);
+        width: 90%;
+        max-width: 460px;
+        background: #0c0c0e;
+        border: 1px solid var(--border);
+        border-radius: 2rem;
+        padding: 2.5rem;
+        z-index: 1000;
+        transition: var(--transition);
+        max-height: 85vh;
+        overflow-y: auto;
+        scrollbar-width: none;
+    }
+    #settings-drawer.open { transform: translateX(-50%) translateY(0); }
+    #overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; z-index: 900; backdrop-filter: blur(12px); }
+
+    kbd {
+        background: rgba(255, 255, 255, 0.15);
+        color: var(--text-main);
+        padding: 2px 7px;
+        border-radius: 5px;
+        font-size: 0.7rem;
+        font-family: var(--font-mono);
+        font-weight: 700;
+    }
+
+    .philosophy-card {
+        background: rgba(255, 146, 60, 0.05);
+        border-left: 3px solid var(--accent-chill);
+        padding: 1.25rem;
+        border-radius: 1rem;
+        margin-top: 1rem;
+        font-size: 0.8rem;
+        line-height: 1.6;
+        color: var(--text-main);
+    }
+</style>
+</head>
+<body id="engine-body">
+<div id="glow-1" class="glow"></div>
+<div id="glow-2" class="glow"></div>
+<div id="overlay" onclick="toggleSettings()"></div>
+
+<!-- Badge Gallery Modal -->
+<div id="badge-modal" class="modal" onclick="toggleBadgeModal(false)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <h2 style="font-weight: 800; margin-bottom: 0.5rem;">Artifact Gallery</h2>
+        <p id="badge-detail-text" style="color: var(--accent-zen); font-size: 0.85rem; margin-bottom: 1.5rem; min-height: 3.5em; background: rgba(255,255,255,0.03); padding: 12px; border-radius: 12px;">Click a badge to pin it (Max 3).</p>
+        <div class="achievement-grid" id="achievement-list"></div>
+        <button class="btn" style="width: 100%; margin-top: 2rem; background: var(--text-main); color: var(--bg);" onclick="toggleBadgeModal(false)">Close Gallery</button>
+    </div>
+</div>
+
+<!-- XP Path Modal -->
+<div id="xp-modal" class="modal" onclick="toggleXPModal(false)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <h2 style="font-weight: 800; margin-bottom: 1.5rem;">Progression Path</h2>
+        <div class="stat-card" style="margin-bottom: 2rem;">
+            <div class="stat-val" id="modal-total-xp" style="color: var(--accent-zen)">0</div>
+            <div class="stat-sub">Lifetime XP Earned</div>
+        </div>
+        <label class="section-label">Atmosphere Unlocks</label>
+        <ul class="rank-list" id="rank-roadmap" style="list-style: none;"></ul>
+        <button class="btn" style="width: 100%; margin-top: 2rem; background: var(--text-main); color: var(--bg);" onclick="toggleXPModal(false)">Dismiss</button>
+    </div>
+</div>
+
+<!-- LEFT SIDEBAR -->
+<aside id="left-sidebar">
+    <!-- XP Progress -->
+    <div class="xp-card" onclick="toggleXPModal(true)">
+        <div class="xp-header">
+            <div class="xp-rank" id="xp-rank-text">Initiate</div>
+            <div class="xp-lvl">Lv. <span id="xp-lvl-text">1</span></div>
+        </div>
+        <div class="xp-bar-bg"><div class="xp-bar-fill" id="xp-bar-fill"></div></div>
+        <div style="display: flex; justify-content: space-between; font-size: 0.5rem; font-weight: 800; letter-spacing: 0.05em;">
+            <span style="color: var(--accent-zen)">1 MIN FOCUS = 1 XP</span>
+            <span id="xp-next-text" style="color: var(--text-dim)">0 / 100 XP</span>
+        </div>
+    </div>
+
+    <!-- Badge Showcase -->
+    <div class="badge-widget" onclick="toggleBadgeModal(true)">
+        <div class="section-label" style="margin-bottom: 0;">Showcase</div>
+        <div class="badge-grid-mini" id="pinned-showcase">
+            <div class="badge-slot-mini"></div>
+            <div class="badge-slot-mini"></div>
+            <div class="badge-slot-mini"></div>
+        </div>
+    </div>
+
+    <!-- Today Stats -->
+    <div class="stat-card">
+        <div class="stat-val" id="focused-today">00:00</div>
+        <div class="stat-sub">Focus Today 🎯</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-val" id="chilled-today">00:00</div>
+        <div class="stat-sub">Chill Today ☕</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-val" id="tasks-today">0</div>
+        <div class="stat-sub">Completed Today ✅</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-val" id="streak-val">0</div>
+        <div class="stat-sub">Day Streak 🔥</div>
+    </div>
+
+    <!-- Historical Context -->
+    <div class="calendar">
+        <div class="cal-header">
+            <button class="cal-nav-btn" onclick="changeViewMonth(-1)">←</button>
+            <div class="cal-month-label" id="cal-month-label">Month Year</div>
+            <button class="cal-nav-btn" onclick="changeViewMonth(1)">→</button>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+    </div>
+</aside>
+
+<!-- MAIN INTERFACE -->
+<main>
+    <div id="mode-label" style="font-size: 0.75rem; letter-spacing: 0.4em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 1.5rem; min-height: 1em;"></div>
+    <div id="current-objective" style="font-size: 1.25rem; color: var(--accent-zen); margin-bottom: 2.5rem; min-height: 1.5rem; font-weight: 400; text-align: center; letter-spacing: 0.01em;"></div>
+    <div id="timer-display">00:00:00</div>
+    
+    <div class="controls">
+        <button class="btn" onclick="setMode('chill')">Chill <kbd>C</kbd></button>
+        <button class="btn" onclick="setMode('focus')">Focus <kbd>F</kbd></button>
+        <button class="btn btn-icon" onclick="toggleTimer()"><svg id="play-icon" width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+        <button class="btn btn-icon" onclick="resetTimer()"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
+    </div>
+    <button class="btn" style="position: fixed; bottom: 2rem;" onclick="toggleZen()">Zen Mode <kbd>Z</kbd></button>
+</main>
+
+<!-- RIGHT SIDEBAR -->
+<aside id="right-sidebar">
+    <div style="flex: 1; overflow-y: auto; scrollbar-width: none;">
+        <div style="margin-bottom: 2.5rem;">
+            <label class="section-label">Initiate Objective</label>
+            <input type="text" id="task-input" placeholder="Enter focus goal...">
+        </div>
+        <div style="margin-bottom: 2rem;">
+            <label class="section-label">Active</label>
+            <ul id="task-list-active" style="list-style: none;"></ul>
+        </div>
+        <div>
+            <label class="section-label">Complete</label>
+            <ul id="task-list-complete" style="list-style: none;"></ul>
+        </div>
+    </div>
+    <button class="btn" style="width: 100%; margin-top: 1rem;" onclick="toggleSettings()">Settings</button>
+</aside>
+
+<!-- SETTINGS PANEL -->
+<div id="settings-drawer">
+    <h3 style="margin-bottom: 1rem; font-weight: 800;">Configuration</h3>
+    
+    <div class="section-label" style="margin-top: 1rem;">The Debt Mechanic</div>
+    <div class="philosophy-card">
+        <strong>The Concept:</strong> Every second in Chill mode builds "Potential Debt." Swapping to Focus allows you to pay it back at an accelerated rate.
+        <br><br>
+        <strong>The Philosophy:</strong> Unlike standard timers, Reverse Flowmodoro creates a psychological weight. The longer you relax, the larger your debt grows. This "negative balance" triggers a biological drive to settle the score and start working. Your current debt is settled at <span id="philosophy-mult-display" style="font-weight: 800; color: var(--accent-chill);">4.0</span>x speed.
+        <br><br>
+        <strong>MADE BY: RANVEER SINGH</strong>
+    </div>
+
+    <div class="setting-row" style="margin-top: 2rem;">
+        <label class="section-label">Atmosphere</label>
+        <select id="theme-select" onchange="changeTheme(this.value)" style="width: 100%; background: #1a1a1c; border: 1px solid var(--border); color: #ffffff; padding: 1rem; border-radius: 1rem; outline: none; margin-top: 0.5rem; font-weight: 600; cursor: pointer;">
+            <option value="default">Midnight</option><option value="ocean">Ocean</option><option value="forest">Forest</option><option value="sunset">Sunset</option><option value="mono">Mono</option>
+        </select>
+    </div>
+
+    <div class="setting-row" style="margin-top: 2rem;">
+        <label class="section-label">Custom Wallpaper (Max 3MB)</label>
+        <input type="file" id="wallpaper-upload" accept="image/*" style="display: none;" onchange="uploadWallpaper(event)">
+        <button class="btn" style="width: 100%; margin-top: 0.5rem;" onclick="document.getElementById('wallpaper-upload').click()">Upload Image</button>
+        <button class="btn" style="width: 100%; margin-top: 0.5rem; color: #f87171;" onclick="clearWallpaper()">Reset</button>
+    </div>
+
+    <div class="setting-row" style="margin-top: 2rem;">
+        <div style="display: flex; justify-content: space-between;">
+            <label class="section-label">Focus Multiplier</label> 
+            <span id="mult-val" style="color:var(--accent-focus); font-family:var(--font-mono); font-weight:800;">4x</span>
+        </div>
+        <input type="range" id="mult-range" min="1" max="10" step="0.5" value="4" style="width:100%; accent-color: var(--accent-focus); margin-top: 10px; cursor: pointer;">
+    </div>
+
+    <button class="btn btn-primary" style="width: 100%; margin-top: 2.5rem; background: var(--text-main); color: var(--bg);" onclick="toggleSettings()">Save Changes</button>
+</div>
+
+<!-- CORE SCRIPT LOGIC -->
+<script>
+    // DATE INITIALIZATION
+    const now = new Date();
+    let viewDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    // PERSISTENT STATE OBJECT
+    let state = {
+        mode: 'idle', 
+        isRunning: false, 
+        cTime: parseInt(localStorage.getItem('ae_ctime')) || 0, 
+        fTime: parseInt(localStorage.getItem('ae_ftime')) || 0, 
+        continuousFocusSeconds: 0, 
+        totalChilledToday: parseInt(localStorage.getItem('ae_chilled_today')) || 0,
+        totalFocusedToday: parseInt(localStorage.getItem('ae_focused_today')) || 0,
+        tasksDoneToday: parseInt(localStorage.getItem('ae_tasks_done_today')) || 0,
+        multiplier: parseFloat(localStorage.getItem('ae_mult')) || 4,
+        tasks: JSON.parse(localStorage.getItem('ae_tasks')) || [],
+        streak: parseInt(localStorage.getItem('ae_streak')) || 0,
+        xp: parseInt(localStorage.getItem('ae_xp')) || 0,
+        xpProgress: parseFloat(localStorage.getItem('ae_xp_prog')) || 0, 
+        lastDate: localStorage.getItem('ae_last_date') || new Date().toDateString(),
+        theme: localStorage.getItem('ae_theme') || 'default',
+        customWallpaper: localStorage.getItem('ae_wallpaper') || null,
+        logs: JSON.parse(localStorage.getItem('ae_logs')) || {},
+        maxContinuousFocus: parseInt(localStorage.getItem('ae_max_cont')) || 0,
+        totalTasksDone: parseInt(localStorage.getItem('ae_tasks_done')) || 0,
+        nightOwlSeconds: parseInt(localStorage.getItem('ae_no_sec')) || 0,
+        earlyBirdSeconds: parseInt(localStorage.getItem('ae_eb_sec')) || 0,
+        pinnedBadges: JSON.parse(localStorage.getItem('ae_pinned')) || [],
+        lastTick: Date.now()
+    };
+
+    // ACHIEVEMENTS DATABASE
+    const badgeDefs = {
+        monk: { icon: "🧘", name: "The Monk", desc: "Focus without pausing.", tiers: [30, 60, 120], unit: "min" },
+        machine: { icon: "⚙️", name: "The Machine", desc: "Lifetime focus time.", tiers: [600, 3000, 12000], unit: "min" },
+        scholar: { icon: "📜", name: "Scholar", desc: "Complete objectives.", tiers: [10, 50, 250], unit: "tasks" },
+        nightowl: { icon: "🦉", name: "Night Owl", desc: "Focus (12AM-5AM).", tiers: [300, 1200, 6000], unit: "min" },
+        earlybird: { icon: "🌅", name: "Early Bird", desc: "Focus (5AM-9AM).", tiers: [300, 1200, 6000], unit: "min" },
+        streak: { icon: "👑", name: "Streak King", desc: "Longest day streak achieved.", tiers: [7, 30, 100], unit: "days" }
+    };
+
+    // PROGRESSION DATABASE
+    const ranks = [
+        { name: "Initiate", lvl: 1, unlock: "Default Theme" },
+        { name: "Architect", lvl: 3, unlock: "Ocean Theme" },
+        { name: "Deep Thinker", lvl: 7, unlock: "Forest Theme" },
+        { name: "Master", lvl: 15, unlock: "Sunset Theme" },
+        { name: "Sage", lvl: 25, unlock: "Mono Theme" }
+    ];
+
+    // ATMOSPHERE DATABASE
+    const themes = { 
+        default: { focus: '#818cf8', chill: '#fb923c', bg: '#030303' }, 
+        ocean: { focus: '#0ea5e9', chill: '#2dd4bf', bg: '#020617', req: 3 }, 
+        forest: { focus: '#22c55e', chill: '#a855f7', bg: '#050505', req: 7 }, 
+        sunset: { focus: '#f43f5e', chill: '#fbbf24', bg: '#0c0a09', req: 15 }, 
+        mono: { focus: '#ffffff', chill: '#525252', bg: '#000000', req: 25 } 
+    };
+
+    // SYSTEM INITIALIZATION
+    function init() {
+        if ("Notification" in window) Notification.requestPermission();
+        
+        renderTasks(); 
+        renderCalendar(); 
+        updateStreak(); 
+        updateXPDisplay(); 
+        renderPinnedShowcase();
+
+        changeTheme(state.theme); 
+        if(state.customWallpaper) {
+            applyWallpaper(state.customWallpaper);
+        }
+
+        document.getElementById('theme-select').value = state.theme;
+        
+        const multSlider = document.getElementById('mult-range');
+        multSlider.value = state.multiplier;
+        document.getElementById('mult-val').innerText = state.multiplier + 'x';
+        document.getElementById('philosophy-mult-display').innerText = state.multiplier;
+        
+        multSlider.oninput = function(e) {
+            state.multiplier = parseFloat(e.target.value);
+            document.getElementById('mult-val').innerText = state.multiplier + 'x';
+            document.getElementById('philosophy-mult-display').innerText = state.multiplier;
+            localStorage.setItem('ae_mult', state.multiplier);
+        };
+
+        updateDisplay(); 
+        updateChilledDisplay(); 
+        updateFocusedDisplay(); 
+        updateDailyTaskDisplay();
+    }
+
+    // NAVIGATION BLOCKER (Protects shortcuts while in menus)
+    function canInteract() {
+        const modals = document.querySelectorAll('.modal');
+        const isAnyModalOpen = Array.from(modals).some(m => m.style.display === 'flex');
+        const isSettingsOpen = document.getElementById('settings-drawer').classList.contains('open');
+        return !isAnyModalOpen && !isSettingsOpen;
+    }
+
+    // PROGRESSION CALCULATIONS
+    function calculateLevel(xp) {
+        return Math.floor(Math.pow(xp / 100, 1 / 1.8)) + 1;
+    }
+
+    function getXPForLevel(lvl) {
+        return Math.floor(100 * Math.pow(lvl - 1, 1.8));
+    }
+
+    function updateXPDisplay() {
+        const level = calculateLevel(state.xp);
+        const currentLevelXP = getXPForLevel(level);
+        const nextLevelXP = getXPForLevel(level + 1);
+        const progressXP = state.xp - currentLevelXP;
+        const totalNeeded = nextLevelXP - currentLevelXP;
+        
+        document.getElementById('xp-lvl-text').innerText = level;
+        document.getElementById('xp-bar-fill').style.width = ((progressXP / totalNeeded) * 100) + '%';
+        document.getElementById('xp-next-text').innerText = `${Math.floor(progressXP)} / ${Math.floor(totalNeeded)} XP`;
+        
+        const currentRank = [...ranks].reverse().find(r => level >= r.lvl);
+        document.getElementById('xp-rank-text').innerText = currentRank ? currentRank.name : "Initiate";
+        
+        updateThemeDropdownVisibility(level);
+    }
+
+    function updateThemeDropdownVisibility(lvl) {
+        const select = document.getElementById('theme-select');
+        Object.keys(themes).forEach(t => {
+            const opt = select.querySelector(`option[value="${t}"]`);
+            if (opt && themes[t].req) {
+                const isLocked = lvl < themes[t].req;
+                opt.disabled = isLocked;
+                opt.textContent = isLocked ? `${t.charAt(0).toUpperCase() + t.slice(1)} 🔒 (Lv. ${themes[t].req})` : t.charAt(0).toUpperCase() + t.slice(1);
+            }
+        });
+    }
+
+    function toggleXPModal(show) {
+        const modal = document.getElementById('xp-modal');
+        modal.style.display = show ? 'flex' : 'none';
+        if(show) {
+            const level = calculateLevel(state.xp);
+            document.getElementById('modal-total-xp').innerText = state.xp.toLocaleString();
+            const roadmap = document.getElementById('rank-roadmap');
+            roadmap.innerHTML = ranks.map(r => `
+                <li style="padding:12px 0; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; ${level >= r.lvl ? 'color:var(--accent-zen)' : 'opacity:0.3'}">
+                    <span>${r.name}</span>
+                    <span>Lv. ${r.lvl}</span>
+                </li>
+            `).join('');
+        }
+    }
+
+    // BADGE ENGINE
+    function getBadgeTier(id) {
+        let val = 0;
+        switch(id) {
+            case 'monk': val = state.maxContinuousFocus / 60; break;
+            case 'machine': val = state.xp; break;
+            case 'scholar': val = state.totalTasksDone; break;
+            case 'nightowl': val = state.nightOwlSeconds / 60; break;
+            case 'earlybird': val = state.earlyBirdSeconds / 60; break;
+            case 'streak': val = state.streak; break;
+        }
+        const tiers = badgeDefs[id].tiers;
+        if (val >= tiers[2]) return { tier: 3, label: "Gold", color: "var(--tier-gold)", val };
+        if (val >= tiers[1]) return { tier: 2, label: "Silver", color: "var(--tier-silver)", val };
+        if (val >= tiers[0]) return { tier: 1, label: "Bronze", color: "var(--tier-bronze)", val };
+        return { tier: 0, label: "Locked", color: "var(--text-dim)", val };
+    }
+
+    function toggleBadgeModal(show) {
+        document.getElementById('badge-modal').style.display = show ? 'flex' : 'none';
+        if(show) renderAchievementList();
+    }
+
+    function showBadgeInfo(id) {
+        const info = badgeDefs[id];
+        const status = getBadgeTier(id);
+        const current = Math.floor(status.val);
+        const target = status.tier < 3 ? info.tiers[status.tier] : "MAX";
+        
+        document.getElementById('badge-detail-text').innerHTML = `
+            <strong>${info.name}</strong>: ${info.desc}<br>
+            Progress: ${current} / ${target} ${info.unit}. Click to toggle pinning.
+        `;
+        
+        if (status.tier > 0) {
+            if (state.pinnedBadges.includes(id)) {
+                state.pinnedBadges = state.pinnedBadges.filter(p => p !== id);
+            } else if (state.pinnedBadges.length < 3) {
+                state.pinnedBadges.push(id);
+            }
+            localStorage.setItem('ae_pinned', JSON.stringify(state.pinnedBadges));
+            renderAchievementList(); 
+            renderPinnedShowcase();
+        }
+    }
+
+    function renderAchievementList() {
+        const container = document.getElementById('achievement-list');
+        container.innerHTML = Object.keys(badgeDefs).map(id => {
+            const info = badgeDefs[id];
+            const status = getBadgeTier(id);
+            const isPinned = state.pinnedBadges.includes(id);
+            return `
+                <div class="achievement-item ${status.tier === 0 ? 'locked' : ''} ${isPinned ? 'pinned' : ''}" onclick="showBadgeInfo('${id}')">
+                    <div style="font-size: 1.5rem;">${info.icon}</div>
+                    <div style="font-weight: 800; font-size: 0.8rem; margin-top:5px;">${info.name}</div>
+                    <div style="font-size: 0.6rem; color:${status.color}; font-weight:800;">${status.label}</div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function renderPinnedShowcase() {
+        const container = document.getElementById('pinned-showcase');
+        const slots = container.querySelectorAll('.badge-slot-mini');
+        slots.forEach((slot, i) => {
+            const id = state.pinnedBadges[i];
+            if (id) {
+                const status = getBadgeTier(id);
+                slot.innerHTML = badgeDefs[id].icon; 
+                slot.style.borderColor = status.color;
+                slot.style.boxShadow = `inset 0 0 10px ${status.color}33`;
+            } else { 
+                slot.innerHTML = ""; 
+                slot.style.borderColor = "var(--border)"; 
+                slot.style.boxShadow = "none";
+            }
+        });
+    }
+
+    // CALENDAR ENGINE
+    function changeViewMonth(delta) {
+        viewDate.setMonth(viewDate.getMonth() + delta);
+        renderCalendar();
+    }
+
+    function renderCalendar() {
+        const year = viewDate.getFullYear();
+        const month = viewDate.getMonth();
+        const todayStr = new Date().toDateString();
+        
+        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        document.getElementById('cal-month-label').innerText = `${monthNames[month]} ${year}`;
+        
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const grid = document.getElementById('cal-grid');
+        
+        grid.innerHTML = ['S','M','T','W','T','F','S'].map(d => `<div class="cal-day-label">${d}</div>`).join('');
+        
+        for(let i=0; i < firstDay; i++) {
+            grid.innerHTML += '<div></div>';
+        }
+        
+        for(let i=1; i <= daysInMonth; i++) {
+            const dObj = new Date(year, month, i);
+            const dStr = dObj.toDateString();
+            const log = state.logs[dStr] || {f: 0, c: 0};
+            const isToday = dStr === todayStr ? 'current' : 'active';
+            const hasData = (log.f + log.c > 0) ? 'has-data' : '';
+            
+            grid.innerHTML += `
+                <div class="cal-date ${isToday} ${hasData}">
+                    ${i}
+                    <div class="cal-tooltip">
+                        <div class="tooltip-row" style="color:var(--accent-focus)">Focus <span>${Math.round(log.f/60)}m</span></div>
+                        <div class="tooltip-row" style="color:var(--accent-chill)">Chill <span>${Math.round(log.c/60)}m</span></div>
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    // TIMER & MODE CONTROLS
+    function setMode(m) {
+        state.lastTick = Date.now();
+        if (m === 'focus') {
+            if (state.cTime > 0) {
+                // BUG FIX 3: rounding the fTime to prevent decimal stutters
+                state.fTime = Math.floor(state.cTime * state.multiplier); 
+                state.cTime = 0;
+                localStorage.setItem('ae_ctime', 0);
+                state.continuousFocusSeconds = 0; 
+            } else if (state.fTime <= 0) {
+                state.fTime = 1500; // Allow Focus with no debt (25 min default)
+            }
+        } else if (m === 'chill') {
+            // BUG FIX 2: Continuous focus session ends when entering Chill
+            state.continuousFocusSeconds = 0;
+        }
+        state.mode = m;
+        state.isRunning = true;
+        updateDisplay();
+    }
+
+    function toggleTimer() {
+        state.lastTick = Date.now();
+        if (state.mode !== 'idle') {
+            state.isRunning = !state.isRunning;
+            if(!state.isRunning) {
+                // BUG FIX 2: Continuous session ends if timer is paused
+                state.continuousFocusSeconds = 0; 
+            }
+        }
+        updateDisplay();
+    }
+
+    function resetTimer() {
+        state.mode = 'idle';
+        state.isRunning = false;
+        state.cTime = 0;
+        state.fTime = 0;
+        state.continuousFocusSeconds = 0;
+        localStorage.setItem('ae_ctime', 0);
+        localStorage.setItem('ae_ftime', 0);
+        updateDisplay();
+    }
+
+    function toggleZen() {
+        document.body.classList.toggle('zen-mode');
+    }
+
+    // CUSTOM WALLPAPER ENGINE
+    function uploadWallpaper(e) {
+        const file = e.target.files[0];
+        // BUG FIX 1: Limit lowered to 3MB to prevent Base64 QuotaExceededError
+        if (file && file.size <= 3145728) { 
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const url = event.target.result;
+                localStorage.setItem('ae_wallpaper', url);
+                state.customWallpaper = url;
+                applyWallpaper(url);
+            };
+            reader.readAsDataURL(file);
+        } else if (file) {
+            alert("File exceeds 3MB limit. Please compress the image.");
+        }
+    }
+
+    function applyWallpaper(url) {
+        document.body.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url(${url})`;
+    }
+
+    function clearWallpaper() {
+        localStorage.removeItem('ae_wallpaper');
+        state.customWallpaper = null;
+        document.body.style.backgroundImage = 'none';
+    }
+
+    // STATS UPDATERS
+    function formatTime(s) {
+        const h = Math.floor(s/3600).toString().padStart(2, '0');
+        const m = Math.floor((s%3600)/60).toString().padStart(2, '0');
+        const sec = (s%60).toString().padStart(2, '0');
+        return `${h}:${m}:${sec}`;
+    }
+
+    function updateChilledDisplay() {
+        document.getElementById('chilled-today').innerText = formatTime(state.totalChilledToday);
+    }
+
+    function updateFocusedDisplay() {
+        document.getElementById('focused-today').innerText = formatTime(state.totalFocusedToday);
+    }
+
+    function updateDailyTaskDisplay() {
+        document.getElementById('tasks-today').innerText = state.tasksDoneToday;
+    }
+
+    function updateStorageLog() {
+        const today = new Date().toDateString();
+        state.logs[today] = { f: state.totalFocusedToday, c: state.totalChilledToday };
+        localStorage.setItem('ae_logs', JSON.stringify(state.logs));
+        if(viewDate.getMonth() === new Date().getMonth()) renderCalendar();
+    }
+
+    function changeTheme(themeKey) {
+        const lvl = calculateLevel(state.xp);
+        if (themes[themeKey].req && lvl < themes[themeKey].req) return;
+        
+        const t = themes[themeKey];
+        document.documentElement.style.setProperty('--accent-focus', t.focus);
+        document.documentElement.style.setProperty('--accent-chill', t.chill);
+        document.documentElement.style.setProperty('--bg', t.bg);
+        state.theme = themeKey;
+        localStorage.setItem('ae_theme', themeKey);
+    }
+
+    function updateDisplay() {
+        const tEl = document.getElementById('timer-display');
+        const mEl = document.getElementById('mode-label');
+        
+        if (state.mode === 'chill') {
+            tEl.innerText = formatTime(state.cTime);
+            tEl.style.color = 'var(--accent-chill)';
+            mEl.innerText = "Building Potential";
+        } else if (state.mode === 'focus') {
+            tEl.innerText = formatTime(state.fTime);
+            tEl.style.color = 'var(--accent-focus)';
+            mEl.innerText = "Deep Work Active";
+        } else {
+            tEl.innerText = "00:00:00";
+            tEl.style.color = 'var(--text-main)';
+            mEl.innerText = "Standby";
+        }
+        
+        document.getElementById('play-icon').innerHTML = state.isRunning ? 
+            '<path d="M6 4h4v16H6zm8 0h4v16h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
+    }
+
+    // ENGINE CORE HEARTBEAT
+    setInterval(() => {
+        if (!state.isRunning) {
+            state.lastTick = Date.now();
+            return;
+        }
+
+        const now = Date.now();
+        let delta = Math.floor((now - state.lastTick) / 1000);
+        if (delta <= 0) return;
+        state.lastTick += delta * 1000;
+
+        for(let i = 0; i < delta; i++) {
+            if (!state.isRunning) break;
+
+            if (state.mode === 'chill') {
+                state.cTime++;
+                state.totalChilledToday++;
+                localStorage.setItem('ae_ctime', state.cTime);
+                
+                if (state.cTime === 3600) {
+                    if ("Notification" in window && Notification.permission === "granted") {
+                        new Notification("Debt Alert: 1 Hour", { body: "The debt is heavy. Time to settle the score." });
+                    }
+                }
+                
+                if (state.cTime % 5 === 0) {
+                    localStorage.setItem('ae_chilled_today', state.totalChilledToday);
+                    updateChilledDisplay();
+                }
+            } else if (state.mode === 'focus') {
+                if (state.fTime > 0) {
+                    state.fTime--;
+                    state.totalFocusedToday++;
+                    localStorage.setItem('ae_ftime', state.fTime);
+                    
+                    // Continuous Session Tracking
+                    state.continuousFocusSeconds++;
+                    if (state.continuousFocusSeconds > state.maxContinuousFocus) {
+                        state.maxContinuousFocus = state.continuousFocusSeconds;
+                        localStorage.setItem('ae_max_cont', state.maxContinuousFocus);
+                    }
+
+                    // Decimal XP Precision (Prevents lost time)
+                    state.xpProgress += 0.016666; // 1/60th XP per second
+                    if (state.xpProgress >= 1) {
+                        state.xp++;
+                        state.xpProgress = 0;
+                        localStorage.setItem('ae_xp', state.xp);
+                        updateXPDisplay();
+                        renderPinnedShowcase();
+                    }
+                    localStorage.setItem('ae_xp_prog', state.xpProgress);
+
+                    // Hour-of-Day Badges
+                    const hr = new Date().getHours();
+                    if (hr >= 0 && hr < 5) { state.nightOwlSeconds++; localStorage.setItem('ae_no_sec', state.nightOwlSeconds); }
+                    if (hr >= 5 && hr < 9) { state.earlyBirdSeconds++; localStorage.setItem('ae_eb_sec', state.earlyBirdSeconds); }
+
+                    if (state.fTime % 5 === 0) {
+                        localStorage.setItem('ae_focused_today', state.totalFocusedToday);
+                        updateFocusedDisplay();
+                        updateStorageLog();
+                    }
+                } else {
+                    state.isRunning = false;
+                    state.mode = 'idle';
+                    state.continuousFocusSeconds = 0;
+                    if ("Notification" in window && Notification.permission === "granted") {
+                        new Notification("Focus Session Complete", { body: "Phase complete. Time to recharge." });
+                    }
+                }
+            }
+        }
+        updateDisplay();
+    }, 100);
+
+    // TASK HANDLERS
+    document.getElementById('task-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && e.target.value.trim()) {
+            state.tasks.push({ id: Date.now(), text: e.target.value, done: false });
+            e.target.value = '';
+            saveTasks();
+            renderTasks();
+        }
+    });
+
+    function renderTasks() {
+        const actL = document.getElementById('task-list-active');
+        const comL = document.getElementById('task-list-complete');
+        const actT = state.tasks.filter(t => !t.done);
+        const comT = state.tasks.filter(t => t.done);
+        const tH = (t) => `<li class="task-item ${t.done ? 'done' : ''}"><span style="flex:1; cursor:pointer" onclick="toggleTask(${t.id})">${t.text}</span><button style="background:none; border:none; color:#ef4444; cursor:pointer" onclick="deleteTask(${t.id})">×</button></li>`;
+        actL.innerHTML = actT.map(tH).join('');
+        comL.innerHTML = comT.map(tH).join('');
+        document.getElementById('current-objective').innerText = actT[0] ? actT[0].text : "";
+    }
+
+    function toggleTask(id) {
+        state.tasks = state.tasks.map(t => {
+            if(t.id === id && !t.done) {
+                state.totalTasksDone++;
+                state.tasksDoneToday++;
+                localStorage.setItem('ae_tasks_done', state.totalTasksDone);
+                localStorage.setItem('ae_tasks_done_today', state.tasksDoneToday);
+                updateDailyTaskDisplay();
+            }
+            return t.id === id ? {...t, done: !t.done} : t;
+        });
+        saveTasks();
+        renderTasks();
+    }
+
+    function deleteTask(id) {
+        state.tasks = state.tasks.filter(t => t.id !== id);
+        saveTasks();
+        renderTasks();
+    }
+
+    function saveTasks() {
+        localStorage.setItem('ae_tasks', JSON.stringify(state.tasks));
+    }
+
+    function toggleSettings() {
+        const d = document.getElementById('settings-drawer');
+        const o = document.getElementById('overlay');
+        const open = d.classList.toggle('open');
+        o.style.display = open ? 'block' : 'none';
+    }
+
+    function updateStreak() {
+        const today = new Date().toDateString();
+        if (state.lastDate !== today) {
+            state.totalChilledToday = 0; state.totalFocusedToday = 0; state.tasksDoneToday = 0;
+            localStorage.setItem('ae_chilled_today', 0); localStorage.setItem('ae_focused_today', 0); localStorage.setItem('ae_tasks_done_today', 0);
+            const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+            state.streak = (state.lastDate === yesterday.toDateString()) ? state.streak + 1 : 1;
+            state.lastDate = today; localStorage.setItem('ae_streak', state.streak); localStorage.setItem('ae_last_date', today);
+            updateDailyTaskDisplay();
+        }
+        document.getElementById('streak-val').innerText = state.streak;
+    }
+
+    // GLOBAL SHORTCUT ENGINE
+    window.onkeydown = (e) => {
+        if (document.activeElement.tagName === 'INPUT') return;
+        if (!canInteract()) return;
+        const k = e.key.toLowerCase();
+        if (k === 'c') setMode('chill');
+        if (k === 'f') setMode('focus');
+        if (k === 'x') resetTimer();
+        if (k === 'z') toggleZen();
+        if (e.code === 'Space') { e.preventDefault(); toggleTimer(); }
+    };
+
+    // BOOT SYSTEM
+    init();
+</script>
+</body>
+</html>
